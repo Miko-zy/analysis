@@ -1,3 +1,4 @@
+# database.py
 import pandas as pd
 from sqlalchemy import create_engine, text, inspect
 import re
@@ -220,3 +221,20 @@ class DatabaseManager:
             return True, f"连接成功，发现 {len(tables)} 个表: {table_list}"
         except Exception as e:
             return False, f"连接失败: {str(e)}"
+
+    # 正确的方式：将方法定义在类内部
+    def get_table_data_as_dict(self, table_name, limit=2000):
+        """获取表数据并返回为字典格式"""
+        try:
+            df = self.get_table_data(table_name, limit)
+            if not df.empty and 'error' not in df.columns:
+                return {
+                    'data': df.to_dict('records'),
+                    'columns': list(df.columns),
+                    'row_count': len(df)
+                }
+            else:
+                error_msg = df['error'].iloc[0] if 'error' in df.columns else "无数据返回"
+                return {'error': error_msg}
+        except Exception as e:
+            return {'error': str(e)}
