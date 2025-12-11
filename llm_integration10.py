@@ -18,11 +18,8 @@ class LLMAnalyst:
         self.max_retries = 3
         self.retry_delay = 2
 
-    def _call_ollama(self, prompt, system_prompt=None, temperature=0.1, timeout=None):
-        """调用Ollama API，支持重试机制和自定义超时"""
-        # 使用传入的超时值或默认值
-        actual_timeout = timeout if timeout is not None else self.timeout
-
+    def _call_ollama(self, prompt, system_prompt=None, temperature=0.1):
+        """调用Ollama API，支持重试机制"""
         for attempt in range(self.max_retries):
             try:
                 # 构建消息列表
@@ -39,15 +36,15 @@ class LLMAnalyst:
                         "temperature": temperature,
                         "top_p": 0.9,
                         "top_k": 40,
-                        "num_predict": 2000  # 限制输出长度以节省时间
+                        "num_predict": 4000  # 限制输出长度
                     }
                 }
 
-                # 发送请求到Ollama，使用实际的超时值
+                # 发送请求到Ollama
                 response = requests.post(
                     f"{self.base_url}/api/chat",
                     json=payload,
-                    timeout=actual_timeout
+                    timeout=self.timeout
                 )
 
                 # 检查响应状态
@@ -79,7 +76,7 @@ class LLMAnalyst:
                 time.sleep(self.retry_delay)
 
             except requests.exceptions.Timeout:
-                error_msg = f"请求超时({actual_timeout}秒)，请检查Ollama服务状态或增加超时时间"
+                error_msg = "请求超时，请检查Ollama服务状态"
                 logger.error(error_msg)
                 if attempt == self.max_retries - 1:
                     return error_msg

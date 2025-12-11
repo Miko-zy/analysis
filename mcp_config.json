@@ -1,0 +1,12 @@
+{
+    "mcpServers": {
+      "data-analysis": {
+        "type": "stdio",
+        "command": "python",
+        "args": ["data_analysis_tool.py"],
+        "env": {
+          "PYTHONPATH": "."
+        }
+      }
+    }
+  }

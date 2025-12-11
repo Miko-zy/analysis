@@ -185,18 +185,11 @@ class DatabaseManager:
                 logger.info(f"获取表结构成功: {table_name}, 列数: {len(schema_info)}")
                 return schema_info
             else:
-                # 如果SQLAlchemy方法没有返回列信息，则尝试使用DESCRIBE查询
-                logger.warning(f"SQLAlchemy未能获取表结构: {table_name}，尝试使用DESCRIBE查询")
                 return self._get_table_schema_by_describe(table_name)
 
         except Exception as e:
             logger.error(f"获取表结构错误: {e}")
-            # 即使出错也要尝试备用方法
-            try:
-                return self._get_table_schema_by_describe(table_name)
-            except Exception as fallback_e:
-                logger.error(f"备用方法也失败了: {fallback_e}")
-                return []
+            return self._get_table_schema_by_describe(table_name)
 
     def _get_table_schema_by_describe(self, table_name):
         """使用DESCRIBE查询获取表结构"""
@@ -215,13 +208,7 @@ class DatabaseManager:
                     })
                 logger.info(f"通过DESCRIBE获取表结构成功: {table_name}")
                 return schema_info
-            elif not result_df.empty and 'error' in result_df.columns:
-                error_msg = result_df['error'].iloc[0]
-                logger.error(f"DESCRIBE查询失败: {error_msg}")
-                raise Exception(error_msg)
-            else:
-                logger.warning(f"DESCRIBE查询返回空结果: {table_name}")
-                return []
+            return []
         except Exception as e:
             logger.error(f"通过DESCRIBE获取表结构也失败: {e}")
             return []
