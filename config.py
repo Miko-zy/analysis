@@ -14,11 +14,10 @@ DATABASE_CONFIG = {
     'database': os.getenv('DB_NAME', 'example_an')
 }
 
-# Ollama配置
-OLLAMA_CONFIG = {
-    'base_url': os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434'),
-    'model': os.getenv('OLLAMA_MODEL', 'deepseek-r1:1.5b'),
-    'timeout': int(os.getenv('OLLAMA_TIMEOUT', '120'))
+# 阿里百炼API配置
+DASHSCOPE_CONFIG = {
+    'api_key': os.getenv('DASHSCOPE_API_KEY', 'sk-9688b2480fd943c0b3f8f7022536e78d'),
+    'model': os.getenv('DASHSCOPE_MODEL', 'qwen-plus'),
 }
 
 # 系统配置

@@ -122,7 +122,6 @@ class DataAnalysisSystem:
                         table_data_display = gr.Dataframe(
                             label="数据表",
                             interactive=False,
-                            height=400,
                             wrap=True
                         )
 
@@ -155,7 +154,6 @@ class DataAnalysisSystem:
                         query_result_display = gr.Dataframe(
                             label="",
                             interactive=False,
-                            height=400,
                             wrap=True
                         )
 
@@ -404,7 +402,7 @@ class DataAnalysisSystem:
             return {"error": "请先选择数据表"}
 
         try:
-            df = self.db_manager.get_table_data(table_name, 100)
+            df = self.db_manager.get_table_data(table_name, 50)
             if df.empty or ('error' in df.columns and len(df) == 1):
                 return {"error": "无法加载数据"}
 
@@ -418,7 +416,7 @@ class DataAnalysisSystem:
         """加载表数据"""
         if table_name:
             try:
-                df = self.db_manager.get_table_data(table_name, 100)
+                df = self.db_manager.get_table_data(table_name, 50)
                 total_count = self.db_manager.get_table_count(table_name)
 
                 self.table_data = df

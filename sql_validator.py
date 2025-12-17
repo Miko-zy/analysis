@@ -1,3 +1,4 @@
+# sql_validator.py
 import re
 from typing import List, Dict, Any, Optional, Tuple, Set
 import difflib
@@ -29,176 +30,116 @@ class SQLValidator:
         backtick_matches = re.findall(r'`([^`]+)`', sql_no_strings)
         columns.extend(backtick_matches)
 
-        # 查找没有反引号的列名
-        select_match = re.search(r'SELECT\s+(.*?)\s+FROM', sql_no_strings, re.IGNORECASE | re.DOTALL)
-        if select_match:
-            select_clause = select_match.group(1)
-            select_clause = re.sub(r'\w+\([^)]*\)', '', select_clause)
-            words = re.findall(r'\b([a-zA-Z_][a-zA-Z0-9_]*)\b', select_clause)
-            for word in words:
-                if word.upper() not in self.keyword_patterns['aggregation'] and not word.isdigit():
-                    columns.append(word)
+        # 查找AS别名后的列名（简单模式）
+        as_matches = re.findall(r'AS\s+["\']?([a-zA-Z0-9_\u4e00-\u9fa5]+)["\']?', sql_no_strings, re.IGNORECASE)
+        columns.extend(as_matches)
 
-        return list(set(columns))
+        return list(set(columns))  # 去重
 
     def extract_tables_from_sql(self, sql: str) -> List[str]:
         """从SQL中提取表名"""
         tables = []
 
-        # 查找FROM子句中的表名
-        from_match = re.search(r'FROM\s+([^,(]+)', sql, re.IGNORECASE)
-        if from_match:
-            table_str = from_match.group(1).strip()
-            table_str = re.split(r'\s+(?:AS\s+)?\b[a-zA-Z_]\w*\b', table_str)[0].strip()
-            table_name = table_str.replace('`', '')
-            if table_name:
-                tables.append(table_name)
+        # 移除字符串字面量
+        sql_no_strings = re.sub(r"'(.*?)'", "'STRING'", sql)
+        sql_no_strings = re.sub(r'"(.*?)"', "'STRING'", sql_no_strings)
 
-        # 查找JOIN子句中的表名
-        join_matches = re.findall(r'(?:JOIN|LEFT JOIN|INNER JOIN|RIGHT JOIN)\s+([^,\s]+)', sql, re.IGNORECASE)
-        for match in join_matches:
-            table_str = match.strip()
-            table_str = re.split(r'\s+(?:AS\s+)?\b[a-zA-Z_]\w*\b', table_str)[0].strip()
-            table_name = table_str.replace('`', '')
-            if table_name:
-                tables.append(table_name)
+        # 查找FROM后的表名
+        from_matches = re.findall(r'FROM\s+[`"]?([a-zA-Z0-9_]+)[`"]?', sql_no_strings, re.IGNORECASE)
+        tables.extend(from_matches)
 
-        return list(set(tables))
+        # 查找JOIN后的表名
+        join_matches = re.findall(r'(?:LEFT\s+|RIGHT\s+|INNER\s+)?JOIN\s+[`"]?([a-zA-Z0-9_]+)[`"]?', sql_no_strings, re.IGNORECASE)
+        tables.extend(join_matches)
 
-    def find_similar_column(self, invalid_column: str, available_columns: List[str]) -> Optional[str]:
-        """找到最相似的列名"""
-        if not available_columns:
-            return None
+        return list(set(tables))  # 去重
 
-        # 精确匹配（忽略大小写）
-        for col in available_columns:
-            if col.lower() == invalid_column.lower():
-                return col
-
-        # 部分匹配
-        for col in available_columns:
-            if invalid_column.lower() in col.lower() or col.lower() in invalid_column.lower():
-                return col
-
-        # 使用difflib找到最相似的
-        matches = difflib.get_close_matches(invalid_column, available_columns, n=1, cutoff=0.6)
-        if matches:
-            return matches[0]
-
-        # 常见列名映射
-        column_mappings = {
-            '订购数量': ['数量', 'quantity', 'qty', 'order_quantity', 'total_quantity'],
-            '购买数量': ['数量', 'quantity', 'qty', 'purchase_quantity'],
-            '销售数量': ['数量', 'quantity', 'qty', 'sales_quantity'],
-            '订购金额': ['金额', 'amount', 'total_amount', 'order_amount', 'price'],
-            '销售金额': ['金额', 'amount', 'sales_amount', 'revenue'],
-            '购买金额': ['金额', 'amount', 'purchase_amount'],
-            '订购时间': ['时间', 'date', 'datetime', 'order_date', 'created_at'],
-            '购买时间': ['时间', 'date', 'datetime', 'purchase_date', 'buy_date'],
-            '销售时间': ['时间', 'date', 'datetime', 'sales_date', 'sale_date'],
-            '订单状态': ['状态', 'status', 'order_status'],
-            '支付状态': ['状态', 'status', 'payment_status'],
-            '发货状态': ['状态', 'status', 'delivery_status'],
-        }
-
-        if invalid_column in column_mappings:
-            for possible_name in column_mappings[invalid_column]:
-                if possible_name in available_columns:
-                    return possible_name
-
-        return None
-
-    def validate_sql_structure(self, sql: str) -> Tuple[bool, List[str]]:
-        """验证SQL基本结构"""
-        warnings = []
-
-        sql_upper = sql.upper()
-
-        # 检查是否以SELECT开头
-        if not sql_upper.strip().startswith('SELECT'):
-            warnings.append("SQL应以SELECT开头")
-
-        # 检查是否包含FROM
-        if 'FROM' not in sql_upper:
-            warnings.append("缺少FROM子句")
-
-        # 检查危险关键字
-        dangerous_keywords = ['DROP', 'DELETE', 'UPDATE', 'INSERT', 'ALTER', 'CREATE', 'TRUNCATE']
-        for keyword in dangerous_keywords:
-            if f' {keyword} ' in f' {sql_upper} ':
-                warnings.append(f"检测到危险操作: {keyword}")
-
-        # 检查括号匹配
-        if sql.count('(') != sql.count(')'):
-            warnings.append("括号不匹配")
-
-        # 检查是否有LIMIT
-        if 'LIMIT' not in sql_upper and 'SELECT' in sql_upper:
-            warnings.append("建议添加LIMIT子句限制返回行数")
-
-        return len(warnings) == 0, warnings
-
-    def fix_column_names(self, sql: str, available_columns: List[str], table_name: str = None) -> Tuple[
-        str, Dict[str, str]]:
+    def fix_column_names(self, sql: str, available_columns: List[str], table_name: str) -> Tuple[str, List[str]]:
         """修正SQL中的列名"""
+        if not sql or not available_columns:
+            return sql, []
+
+        corrections = []
         fixed_sql = sql
-        corrections = {}
 
         # 提取SQL中的列名
-        columns_in_sql = self.extract_columns_from_sql(sql)
+        sql_columns = self.extract_columns_from_sql(sql)
 
-        for column in columns_in_sql:
-            if column not in available_columns:
-                similar_column = self.find_similar_column(column, available_columns)
+        # 为每个SQL列名寻找最佳匹配
+        for sql_col in sql_columns:
+            if sql_col in available_columns:
+                continue  # 列名已经正确
 
-                if similar_column:
-                    patterns = [
-                        f'`{column}`',
-                        f'\\b{column}\\b',
-                    ]
-
-                    for pattern in patterns:
-                        fixed_sql = re.sub(
-                            pattern,
-                            f'`{similar_column}`',
-                            fixed_sql,
-                            flags=re.IGNORECASE
-                        )
-
-                    corrections[column] = similar_column
+            # 寻找最相似的列名
+            best_match = difflib.get_close_matches(sql_col, available_columns, n=1, cutoff=0.6)
+            if best_match:
+                old_pattern = rf'(?<!\w)`{re.escape(sql_col)}`(?!\w)'
+                new_pattern = f'`{best_match[0]}`'
+                fixed_sql = re.sub(old_pattern, new_pattern, fixed_sql)
+                corrections.append(f"{sql_col} -> {best_match[0]}")
+                logger.info(f"修正列名: {sql_col} -> {best_match[0]}")
 
         return fixed_sql, corrections
 
-    def generate_safe_sql(self, table_name: str, table_schema: List[Dict], limit: int = 50) -> str:
+    def validate_syntax(self, sql: str) -> Tuple[bool, str]:
+        """基础语法验证"""
+        if not sql or not isinstance(sql, str):
+            return False, "SQL为空"
+
+        sql_upper = sql.upper().strip()
+
+        # 检查是否以SELECT开头
+        if not sql_upper.startswith('SELECT'):
+            return False, "SQL必须以SELECT开头"
+
+        # 检查危险操作
+        dangerous_keywords = ['DROP', 'DELETE', 'UPDATE', 'INSERT', 'ALTER', 'CREATE', 'TRUNCATE']
+        for keyword in dangerous_keywords:
+            if keyword in sql_upper and f' {keyword} ' in f' {sql_upper} ':
+                return False, f"检测到危险操作: {keyword}"
+
+        # 检查必需的关键字
+        required_keywords = ['SELECT', 'FROM']
+        for keyword in required_keywords:
+            if keyword not in sql_upper:
+                return False, f"缺少必需关键字: {keyword}"
+
+        return True, "语法正确"
+
+    def generate_safe_sql(self, table_name: str, schema: List[Dict]) -> str:
         """生成安全的SQL查询"""
-        columns = [col['name'] for col in table_schema]
+        if not schema:
+            return f"SELECT 1 FROM `{table_name}` LIMIT 1"
 
-        # 选择3-5个有代表性的列
-        selected_columns = []
-        column_priority = []
+        # 选择前5个字段
+        columns = schema[:5]
+        column_parts = []
 
-        for col in table_schema:
+        for col in columns:
             col_name = col['name']
-            col_type = col.get('type', '').lower()
+            # 添加有意义的别名
+            alias = self._get_column_alias(col_name)
+            column_parts.append(f"`{col_name}` AS `{alias}`")
 
-            if col.get('primary_key', False):
-                column_priority.append((col_name, 100))
-            elif any(keyword in col_name.lower() for keyword in ['name', 'title', 'desc']):
-                column_priority.append((col_name, 90))
-            elif any(keyword in col_name.lower() for keyword in ['date', 'time', 'create', 'update']):
-                column_priority.append((col_name, 80))
-            elif any(keyword in col_type for keyword in ['int', 'float', 'decimal', 'double']):
-                column_priority.append((col_name, 70))
-            else:
-                column_priority.append((col_name, 60))
+        columns_str = ", ".join(column_parts) if column_parts else "*"
+        return f"SELECT {columns_str} FROM `{table_name}` LIMIT 10"
 
-        column_priority.sort(key=lambda x: x[1], reverse=True)
-        selected_columns = [col[0] for col in column_priority[:5]]
+    def _get_column_alias(self, column_name: str) -> str:
+        """获取列的中文别名"""
+        col_lower = column_name.lower()
 
-        if not selected_columns:
-            selected_columns = columns[:3] if len(columns) >= 3 else columns
+        mappings = {
+            'id': 'ID', 'name': '名称', 'title': '标题', 'desc': '描述', 'description': '描述',
+            'date': '日期', 'time': '时间', 'datetime': '日期时间', 'create_time': '创建时间',
+            'update_time': '更新时间', 'amount': '金额', 'price': '价格', 'cost': '成本',
+            'fee': '费用', 'money': '金额', 'total': '总计', 'sum': '合计', 'count': '数量',
+            'quantity': '数量', 'qty': '数量', 'number': '编号', 'num': '编号', 'status': '状态',
+            'state': '状态', 'type': '类型', 'category': '分类', 'class': '类别', 'group': '分组',
+            'user': '用户', 'username': '用户名', 'password': '密码', 'email': '邮箱',
+            'phone': '电话', 'mobile': '手机', 'address': '地址', 'city': '城市',
+            'province': '省份', 'country': '国家', 'region': '区域', 'area': '地区',
+            'score': '分数', 'grade': '等级', 'level': '级别', 'rate': '比率', 'ratio': '比例',
+            'percent': '百分比', 'percentage': '百分比', 'age': '年龄', 'gender': '性别',
+        }
 
-        select_clause = ', '.join([f'`{col}`' for col in selected_columns])
-        sql = f"SELECT {select_clause} FROM `{table_name}` LIMIT {limit}"
-
-        return sql
+        return mappings.get(col_lower, column_name)

@@ -1,0 +1,12 @@
+{
+    "mcpServers": {
+        "data-analysis-rag": {
+            "type": "stdio",
+            "command": "python",
+            "args": ["mcp_service.py"],
+            "env": {
+                "PYTHONPATH": "."
+            }
+        }
+    }
+}

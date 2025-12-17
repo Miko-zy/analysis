@@ -5,8 +5,9 @@ import time
 import logging
 import traceback
 from typing import Dict, List, Any, Tuple, Optional
-from config import OLLAMA_CONFIG
+from config import DASHSCOPE_CONFIG
 from sql_validator import SQLValidator
+import dashscope
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -299,38 +300,36 @@ ORDER BY 关联数 DESC
             'province': '省份', 'country': '国家', 'region': '区域', 'area': '地区',
             'score': '分数', 'grade': '等级', 'level': '级别', 'rate': '比率', 'ratio': '比例',
             'percent': '百分比', 'percentage': '百分比', 'age': '年龄', 'gender': '性别',
-            'sex': '性别', 'birth': '生日', 'birthday': '生日'
         }
 
-        if re.search(r'[\u4e00-\u9fff]', column_name):
-            return column_name
-
-        for eng_key, chi_value in english_mappings.items():
-            if eng_key == col_lower or f'_{eng_key}' in col_lower or f'{eng_key}_' in col_lower:
-                return chi_value
-
-        suffixes = {
-            '_id': 'ID', '_name': '名称', '_time': '时间', '_date': '日期',
-            '_amount': '金额', '_price': '价格', '_count': '数量', '_total': '总计',
-            '_status': '状态', '_type': '类型'
+        chinese_mappings = {
+            'id': 'ID', '名称': '名称', '标题': '标题', '描述': '描述', '详情': '详情',
+            '日期': '日期', '时间': '时间', '创建时间': '创建时间', '更新时间': '更新时间',
+            '金额': '金额', '价格': '价格', '成本': '成本', '费用': '费用', '总数': '总数',
+            '总计': '总计', '合计': '合计', '数量': '数量', '数目': '数目', '编号': '编号',
+            '状态': '状态', '类型': '类型', '分类': '分类', '类别': '类别', '分组': '分组',
+            '用户': '用户', '用户名': '用户名', '密码': '密码', '邮箱': '邮箱', '电话': '电话',
+            '手机': '手机', '地址': '地址', '城市': '城市', '省份': '省份', '国家': '国家',
+            '区域': '区域', '地区': '地区', '分数': '分数', '等级': '等级', '级别': '级别',
+            '比率': '比率', '比例': '比例', '百分比': '百分比', '年龄': '年龄', '性别': '性别',
         }
 
-        for suffix, alias in suffixes.items():
-            if col_lower.endswith(suffix):
-                prefix = col_lower[:-len(suffix)]
-                if prefix in english_mappings:
-                    return f"{english_mappings[prefix]}{alias}"
-                else:
-                    return f"{prefix}{alias}"
+        # 尝试英文匹配
+        if col_lower in english_mappings:
+            return english_mappings[col_lower]
 
+        # 尝试中文匹配
+        if column_name in chinese_mappings:
+            return chinese_mappings[column_name]
+
+        # 默认返回原名称
         return column_name
 
 
 class LLMAnalyst:
     def __init__(self):
-        self.base_url = OLLAMA_CONFIG['base_url']
-        self.model = OLLAMA_CONFIG['model']
-        self.timeout = OLLAMA_CONFIG['timeout']
+        self.api_key = DASHSCOPE_CONFIG['api_key']
+        self.model = DASHSCOPE_CONFIG['model']
         self.max_retries = 3
         self.retry_delay = 2
         self.template_system = SQLTemplateSystem()
@@ -338,8 +337,11 @@ class LLMAnalyst:
         self.use_template_first = True
         self.auto_fix_columns = True
 
-    def _call_ollama(self, prompt, system_prompt=None, temperature=0.1):
-        """调用Ollama API"""
+        # 设置dashscope api key
+        dashscope.api_key = self.api_key
+
+    def _call_dashscope(self, prompt, system_prompt=None, temperature=0.1):
+        """调用阿里百炼API"""
         for attempt in range(self.max_retries):
             try:
                 messages = []
@@ -347,63 +349,41 @@ class LLMAnalyst:
                     messages.append({"role": "system", "content": system_prompt})
                 messages.append({"role": "user", "content": prompt})
 
-                payload = {
-                    "model": self.model,
-                    "messages": messages,
-                    "stream": False,
-                    "options": {
-                        "temperature": temperature,
-                        "top_p": 0.9,
-                        "top_k": 40,
-                        "num_predict": 6000
-                    }
-                }
-
-                response = requests.post(
-                    f"{self.base_url}/api/chat",
-                    json=payload,
-                    timeout=self.timeout
+                response = dashscope.Generation.call(
+                    model=self.model,
+                    messages=messages,
+                    temperature=temperature,
+                    top_p=0.9,
+                    top_k=40,
+                    max_tokens=2000,
+                    result_format='message'
                 )
 
                 if response.status_code != 200:
-                    error_msg = f"Ollama API错误: 状态码 {response.status_code}, 响应: {response.text}"
+                    error_msg = f"DashScope API错误: 状态码 {response.status_code}, 响应: {response}"
                     logger.error(error_msg)
                     if attempt == self.max_retries - 1:
                         return error_msg
                     time.sleep(self.retry_delay)
                     continue
 
-                result = response.json()
-
-                if 'message' in result and 'content' in result['message']:
-                    content = result['message']['content'].strip()
-                    logger.info(f"Ollama响应成功，长度: {len(content)} 字符")
+                if response.output and response.output.choices:
+                    content = response.output.choices[0].message.content.strip()
+                    logger.info(f"DashScope响应成功，长度: {len(content)} 字符")
                     return content
                 else:
-                    error_msg = f"响应格式错误: {result}"
+                    error_msg = f"响应格式错误: {response}"
                     logger.error(error_msg)
                     return error_msg
 
-            except requests.exceptions.ConnectionError:
-                error_msg = f"无法连接到Ollama服务，请确保Ollama正在运行在 {self.base_url}"
-                logger.error(error_msg)
-                if attempt == self.max_retries - 1:
-                    return error_msg
-                time.sleep(self.retry_delay)
-
-            except requests.exceptions.Timeout:
-                error_msg = "请求超时，请检查Ollama服务状态"
-                logger.error(error_msg)
-                if attempt == self.max_retries - 1:
-                    return error_msg
-                time.sleep(self.retry_delay)
-
             except Exception as e:
-                error_msg = f"未知错误: {str(e)}"
+                error_msg = f"调用DashScope API时发生错误: {str(e)}"
                 logger.error(error_msg)
-                return error_msg
+                if attempt == self.max_retries - 1:
+                    return error_msg
+                time.sleep(self.retry_delay)
 
-        return "所有重试尝试都失败了"
+        return "请求失败"
 
     def _build_detailed_schema_info(self, table_schemas: Dict[str, List[Dict]]) -> str:
         """构建详细的表结构信息"""
@@ -471,8 +451,8 @@ class LLMAnalyst:
             if self.auto_fix_columns:
                 template_sql = self._validate_and_fix_sql(template_sql, table_schemas)
 
-            # 阶段2：如果配置了Ollama且连接正常，尝试优化
-            if self.base_url and self.model and self.base_url != "":
+            # 阶段2：如果配置了API KEY，尝试优化
+            if self.api_key and self.api_key != "":
                 try:
                     # 使用大模型优化模板SQL
                     optimized_sql = self._optimize_sql_with_llm(
@@ -504,50 +484,38 @@ class LLMAnalyst:
         except Exception as e:
             error_msg = f"生成SQL时出现异常: {str(e)}"
             logger.error(error_msg)
-            logger.error(traceback.format_exc())
-            # 返回安全的查询
-            return self._generate_safe_fallback_sql(table_schemas)
+            traceback.print_exc()
 
-    def _generate_sql_from_template(self, natural_language_query: str, table_schemas: Dict) -> str:
+            # 返回安全的回退SQL
+            fallback_sql = self._generate_safe_fallback_sql(table_schemas)
+            return f"-- 错误: {error_msg}\n{fallback_sql}"
+
+    def _generate_sql_from_template(self, natural_language_query: str, table_schemas: Dict[str, List[Dict]]) -> str:
         """使用模板系统生成SQL"""
-        try:
-            intent, intent_info = self.template_system.classify_query_intent(natural_language_query)
-            logger.info(f"查询意图分类: {intent}, 置信度: {intent_info['confidence']}")
+        # 分类查询意图
+        intent, intent_info = SQLTemplateSystem.classify_query_intent(natural_language_query)
+        logger.info(f"识别查询意图: {intent} (置信度: {intent_info['confidence']})")
 
-            template_sql = self.template_system.generate_from_template(
-                intent,
-                table_schemas,
-                intent_info['extracted_params']
-            )
+        # 提取查询参数
+        extracted_params = intent_info['extracted_params']
 
-            template_desc = self.template_system.TEMPLATES.get(intent, {}).get('description', '查询')
-            commented_sql = f"-- 基于模板生成: {template_desc}\n{template_sql}"
+        # 生成SQL
+        sql_query = SQLTemplateSystem.generate_from_template(intent, table_schemas, extracted_params)
 
-            logger.info(f"模板生成SQL成功，意图: {intent}")
-            return commented_sql
-
-        except Exception as e:
-            logger.error(f"模板系统生成SQL失败: {e}")
-            logger.error(traceback.format_exc())
-            tables = list(table_schemas.keys())
-            if tables:
-                return f"SELECT * FROM `{tables[0]}` LIMIT 10"
-            return "SELECT 1"
+        return sql_query
 
     def _validate_and_fix_sql(self, sql: str, table_schemas: Dict[str, List[Dict]]) -> str:
         """验证并修正SQL"""
         try:
-            # 1. 验证SQL结构
-            is_valid, warnings = self.sql_validator.validate_sql_structure(sql)
-            if warnings:
-                logger.warning(f"SQL结构警告: {warnings}")
+            if not sql or not isinstance(sql, str):
+                return sql
+
+            # 1. 移除多余的空白字符
+            sql = re.sub(r'\s+', ' ', sql).strip()
 
             # 2. 提取表名
-            tables = self.sql_validator.extract_tables_from_sql(sql)
-
-            if not tables:
-                logger.warning("SQL中没有找到表名，生成安全查询")
-                return self._generate_safe_fallback_sql(table_schemas)
+            table_pattern = r'FROM\s+`?([^`\s,]+)`?'
+            tables = re.findall(table_pattern, sql, re.IGNORECASE)
 
             # 3. 为每个表修正列名
             for table_name in tables:
@@ -620,7 +588,7 @@ class LLMAnalyst:
 
         system_prompt = """你是一个SQL优化专家。请直接返回优化后的SQL语句，不要包含任何解释、注释或其他文本。"""
 
-        sql_query = self._call_ollama(prompt, system_prompt, temperature=0.1)
+        sql_query = self._call_dashscope(prompt, system_prompt, temperature=0.1)
 
         # 清理响应
         sql_query = sql_query.strip()
@@ -651,82 +619,34 @@ class LLMAnalyst:
         if 'FROM' not in llm_sql.upper():
             return False
 
-        # 检查危险操作
-        dangerous = ['DROP', 'DELETE', 'UPDATE', 'INSERT', 'ALTER', 'CREATE', 'TRUNCATE']
-        for d in dangerous:
-            if f' {d} ' in f' {llm_sql.upper()} ':
-                return False
-
-        # 检查是否过于简单
-        if llm_sql.upper().strip() == 'SELECT 1':
+        # 长度不能太短（相对模板SQL）
+        if len(llm_sql) < len(template_sql) * 0.5:
             return False
+
+        # 不能包含危险关键字
+        dangerous_keywords = ['DROP', 'DELETE', 'UPDATE', 'INSERT', 'ALTER', 'CREATE', 'TRUNCATE']
+        for keyword in dangerous_keywords:
+            if keyword in llm_sql.upper() and f' {keyword} ' in f' {llm_sql.upper()} ':
+                return False
 
         return True
 
-    def analyze_data_insights(self, analysis_prompt, data_description):
-        """使用大模型分析数据洞察"""
-        if not analysis_prompt.strip():
-            return "请输入分析需求"
-
-        if not data_description.strip():
-            return "数据描述为空"
-
-        prompt = f"""
-你是一个专业的数据分析师。请分析以下数据并提供深入的业务洞察：
-
-分析需求: {analysis_prompt}
-
-数据描述: 
-{data_description}
-
-请用中文提供以下分析：
-1. 首先给出数据描述和数据概况，给出分析过程
-2. 主要发现和趋势（3-4个关键点）
-3. 数据中的异常值或有趣模式
-4. 业务建议和行动计划
-5. 进一步分析的建议
-
-请用清晰的结构化格式回答，使用适当的标题和项目符号。
-确保分析基于提供的数据，不要虚构不存在的信息。
-"""
-
-        system_prompt = """你是一个专业的数据分析师，擅长从数据中发现洞察并提供实用的业务建议。
-请用中文回答，结构清晰，内容实用，基于实际数据进行分析。"""
-
-        logger.info("正在进行AI数据分析...")
-        insights = self._call_ollama(prompt, system_prompt, temperature=0.7)
-        return insights
-
-    def check_ollama_connection(self):
-        """检查Ollama连接和模型可用性"""
+    def check_ollama_connection(self) -> Tuple[bool, List[str]]:
+        """检查DashScope连接和模型可用性"""
         try:
-            response = requests.get(f"{self.base_url}/api/tags", timeout=10)
+            # 对于DashScope，我们只需要检查API Key是否有效
+            if not self.api_key or self.api_key == "":
+                return False, ["未配置API Key"]
+
+            # 尝试调用一个简单的API来验证密钥
+            response = dashscope.Models.list()
             if response.status_code == 200:
-                data = response.json()
-                if 'models' in data:
-                    models = data['models']
-                    available_models = [model['name'] for model in models]
-                    logger.info(f"Ollama连接成功，可用模型: {available_models}")
-
-                    if self.model not in available_models:
-                        logger.warning(f"配置的模型 {self.model} 不可用，使用第一个可用模型")
-                        if available_models:
-                            self.model = available_models[0]
-                            logger.info(f"切换到模型: {self.model}")
-
-                    return True, available_models
-                else:
-                    error_msg = "API响应格式异常"
-                    logger.error(error_msg)
-                    return False, [error_msg]
+                logger.info("DashScope连接成功")
+                return True, [self.model]
             else:
-                error_msg = f"HTTP错误: {response.status_code}"
+                error_msg = f"DashScope API错误: {response}"
                 logger.error(error_msg)
                 return False, [error_msg]
-        except requests.exceptions.ConnectionError:
-            error_msg = "无法连接到Ollama服务"
-            logger.error(error_msg)
-            return False, [error_msg]
         except Exception as e:
             error_msg = f"连接错误: {str(e)}"
             logger.error(error_msg)
@@ -821,7 +741,7 @@ class LLMAnalyst:
 4. SQL语法正确"""
 
         logger.info("使用大模型改进SQL...")
-        improved_sql = self._call_ollama(prompt, system_prompt, temperature=0.2)
+        improved_sql = self._call_dashscope(prompt, system_prompt, temperature=0.2)
 
         # 清理响应
         improved_sql = improved_sql.strip()
@@ -840,3 +760,38 @@ class LLMAnalyst:
 
         logger.info("SQL改进成功")
         return commented_sql
+
+    def analyze_data_insights(self, analysis_request: str, data_description: str) -> str:
+        """使用AI分析数据并提供洞察"""
+        try:
+            prompt = f"""
+作为数据分析专家，请根据用户请求分析以下数据并提供有价值的洞察。
+
+用户分析请求: {analysis_request}
+
+数据描述:
+{data_description}
+
+请提供以下方面的分析:
+1. 数据概览和关键发现
+2. 重要的趋势和模式
+3. 异常值或值得注意的现象
+4. 业务含义和潜在机会
+5. 建议的后续行动或深入分析方向
+
+请用中文回答，保持专业性和实用性。
+"""
+
+            system_prompt = "你是一位经验丰富的数据分析师，擅长从数据中发现有价值的洞察并提供实用的业务建议。"
+
+            insights = self._call_dashscope(prompt, system_prompt, temperature=0.3)
+            return insights
+
+        except Exception as e:
+            error_msg = f"AI数据分析失败: {str(e)}"
+            logger.error(error_msg)
+            return error_msg
+
+    def call_ollama_api(self, prompt: str, temperature: float = 0.1) -> str:
+        """调用大模型API的通用方法（兼容旧接口）"""
+        return self._call_dashscope(prompt, temperature=temperature)
