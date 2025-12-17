@@ -2,9 +2,9 @@ import pandas as pd
 from sqlalchemy import create_engine, text, inspect
 import re
 import logging
+from typing import List, Dict, Any, Optional, Tuple
 from config import DATABASE_CONFIG, SYSTEM_CONFIG
 
-# 设置日志
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -86,21 +86,25 @@ class DatabaseManager:
                     result = conn.execute(text(query))
 
                 if result.returns_rows:
-                    df = pd.DataFrame(result.fetchall(), columns=result.keys())
+                    columns = result.keys()
+                    rows = result.fetchall()
+                    df = pd.DataFrame(rows, columns=columns)
+                    logger.info(f"查询执行成功，返回 {len(df)} 行，{len(columns)} 列")
                     return df
                 else:
+                    conn.commit()
+                    logger.info("非查询语句执行成功")
                     return pd.DataFrame({"message": ["Query executed successfully"]})
         except Exception as e:
             error_msg = f"执行查询时出错: {str(e)}"
             logger.error(error_msg)
             return pd.DataFrame({"error": [error_msg]})
 
-    def get_table_data(self, table_name, limit=2000, offset=0):
-        """获取表数据 - 增加默认限制到2000行，支持分页"""
+    def get_table_data(self, table_name, limit=100, offset=0):
+        """获取表数据"""
         try:
             safe_table_name = f"`{table_name}`"
 
-            # 构建查询
             if offset > 0:
                 query = f"SELECT * FROM {safe_table_name} LIMIT {limit} OFFSET {offset}"
             else:
@@ -140,13 +144,8 @@ class DatabaseManager:
     def get_table_info(self, table_name):
         """获取表的完整信息"""
         try:
-            # 获取表结构
             schema = self.get_table_schema(table_name)
-
-            # 获取数据预览（前100行，避免太多）
             sample_data = self.get_table_data(table_name, limit=100)
-
-            # 获取总行数
             total_count = self.get_table_count(table_name)
 
             info = {
@@ -166,7 +165,7 @@ class DatabaseManager:
             logger.error(f"获取表信息错误: {e}")
             return {"error": str(e)}
 
-    def get_table_schema(self, table_name):
+    def get_table_schema(self, table_name: str) -> List[Dict[str, Any]]:
         """获取表结构"""
         try:
             inspector = inspect(self.engine)
@@ -175,12 +174,32 @@ class DatabaseManager:
             if columns:
                 schema_info = []
                 for column in columns:
-                    schema_info.append({
+                    column_info = {
                         'name': column['name'],
                         'type': str(column['type']),
                         'nullable': column['nullable'],
-                        'primary_key': column.get('primary_key', False)
-                    })
+                        'primary_key': column.get('primary_key', False),
+                        'default': column.get('default', None),
+                        'comment': column.get('comment', ''),
+                        'autoincrement': column.get('autoincrement', False)
+                    }
+
+                    col_type = str(column['type']).lower()
+                    if 'int' in col_type:
+                        column_info['category'] = 'integer'
+                    elif 'float' in col_type or 'decimal' in col_type or 'double' in col_type:
+                        column_info['category'] = 'numeric'
+                    elif 'char' in col_type or 'text' in col_type:
+                        column_info['category'] = 'text'
+                    elif 'date' in col_type or 'time' in col_type:
+                        column_info['category'] = 'datetime'
+                    elif 'bool' in col_type:
+                        column_info['category'] = 'boolean'
+                    else:
+                        column_info['category'] = 'other'
+
+                    schema_info.append(column_info)
+
                 logger.info(f"获取表结构成功: {table_name}, 列数: {len(schema_info)}")
                 return schema_info
             else:
@@ -220,3 +239,41 @@ class DatabaseManager:
             return True, f"连接成功，发现 {len(tables)} 个表: {table_list}"
         except Exception as e:
             return False, f"连接失败: {str(e)}"
+
+    def get_simple_query(self, table_name: str) -> str:
+        """生成简单的查询语句"""
+        schema = self.get_table_schema(table_name)
+
+        columns = []
+        for col in schema[:5]:
+            columns.append(f"`{col['name']}`")
+
+        if not columns:
+            return f"SELECT * FROM `{table_name}` LIMIT 50"
+
+        select_clause = ', '.join(columns)
+        return f"SELECT {select_clause} FROM `{table_name}` LIMIT 50"
+
+    def execute_safe_query(self, sql_query: str) -> pd.DataFrame:
+        """安全执行SQL查询，自动降级"""
+        try:
+            result = self.execute_query(sql_query)
+
+            if not result.empty and 'error' in result.columns and len(result) == 1:
+                error_msg = result['error'].iloc[0]
+
+                if "Unknown column" in error_msg:
+                    logger.info("检测到列名错误，尝试简化查询")
+
+                    table_match = re.search(r'FROM\s+`?([\w]+)`?', sql_query, re.IGNORECASE)
+                    if table_match:
+                        table_name = table_match.group(1)
+                        simple_sql = self.get_simple_query(table_name)
+                        logger.info(f"降级到简单查询: {simple_sql}")
+                        return self.execute_query(simple_sql)
+
+            return result
+
+        except Exception as e:
+            logger.error(f"安全查询执行失败: {e}")
+            return pd.DataFrame({"error": [str(e)]})
