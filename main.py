@@ -406,7 +406,8 @@ class DataAnalysisSystem:
             if df.empty or ('error' in df.columns and len(df) == 1):
                 return {"error": "无法加载数据"}
 
-            summary = self.data_analyzer.get_data_summary(df)
+            # 使用 generate_summary_statistics 方法
+            summary = self.data_analyzer.generate_summary_statistics(df)
             return summary
         except Exception as e:
             logger.error(f"生成数据摘要失败: {e}")

@@ -147,7 +147,7 @@ if __name__ == "__main__":
     signal.signal(signal.SIGINT, signal_handler)
 
     # 设置MCP接入点URL
-    endpoint_url = "wss://api.xiaozhi.me/mcp/?token=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjUwNzc5MiwiYWdlbnRJZCI6NzMxOTUwLCJlbmRwb2ludElkIjoiYWdlbnRfNzMxOTUwIiwicHVycG9zZSI6Im1jcC1lbmRwb2ludCIsImlhdCI6MTc2NTk2MTc3MywiZXhwIjoxNzk3NTE5MzczfQ.lJAjrFgar1lEIwAqZ0FGdCyaADdnfgZuHqzA8Z_yqdKQkVQLwocFv66DQjGnHFXDGlOnrP863PvOZve-o297SA"
+    endpoint_url = "wss://api.xiaozhi.me/mcp/?token=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjUwNzc5MiwiYWdlbnRJZCI6NzMxOTUwLCJlbmRwb2ludElkIjoiYWdlbnRfNzMxOTUwIiwicHVycG9zZSI6Im1jcC1lbmRwb2ludCIsImlhdCI6MTc2NjM2NjY5NywiZXhwIjoxNzk3OTI0Mjk3fQ.QGvj0-TLIM5EUAbtE96HHF8ZdL0pbT0ANVrZwXkAFNVKtOOLMdJvv1om0E4IDV7A-DUYlq-fNYgP1rJX7P6ZWw"
 
     # 修改为从环境变量获取:
     #endpoint_url = os.environ.get('MCP_ENDPOINT')

@@ -127,3 +127,16 @@ class DatabaseManager:
             logger.error(f"获取表 {table_name} 数据失败: {e}")
             error_df = pd.DataFrame({'error': [str(e)]})
             return error_df
+
+    def get_table_count(self, table_name: str) -> int:
+        """获取表的总行数"""
+        try:
+            sql_query = f"SELECT COUNT(*) as count FROM `{table_name}`"
+            with self.engine.connect() as conn:
+                result = conn.execute(text(sql_query))
+                count = result.fetchone()[0]
+                logger.info(f"表 {table_name} 的总行数: {count}")
+                return count
+        except Exception as e:
+            logger.error(f"获取表 {table_name} 行数失败: {e}")
+            return 0

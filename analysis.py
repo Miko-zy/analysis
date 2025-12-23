@@ -267,3 +267,150 @@ class DataAnalyzer:
         except Exception as e:
             logger.error(f"创建可视化失败: {e}")
             return {"error": str(e)}
+
+    def get_available_chart_types(self) -> List[Dict[str, str]]:
+        """获取可用的图表类型（带描述）"""
+        available_charts = []
+
+        for chart_type, config in CHART_CONFIGS.items():
+            available_charts.append({
+                'value': chart_type,
+                'title': config['title'],
+                'label': f"{config['title']} - {config['description']}",
+                'description': config['description'],
+                'logic': config.get('logic', '')
+            })
+
+        return available_charts
+
+    def _create_error_plot(self, error_message: str):
+        """创建错误提示的图表"""
+        import matplotlib.pyplot as plt
+
+        fig, ax = plt.subplots(figsize=(8, 4))
+        ax.text(0.5, 0.5, error_message,
+                ha='center', va='center',
+                fontsize=14, color='red')
+        ax.set_xlim(0, 1)
+        ax.set_ylim(0, 1)
+        ax.axis('off')
+        plt.tight_layout()
+        return fig
+
+    # 添加 get_data_summary 方法（在日志中被调用）
+    def get_data_summary(self, df: pd.DataFrame) -> Dict[str, Any]:
+        """获取数据摘要（兼容性方法）"""
+        return self.generate_summary_statistics(df)
+
+    # 添加智能推荐字段的方法
+    def get_smart_field_recommendations(self, df: pd.DataFrame, chart_type: str) -> Dict[str, List[str]]:
+        """智能推荐图表字段"""
+        recommendations = {'x_axis': [], 'y_axis': []}
+
+        for column in df.columns:
+            col_info = self._analyze_column(df[column])
+
+            if chart_type == 'bar':
+                if col_info['type'] in ['categorical', 'ordinal']:
+                    recommendations['x_axis'].append(column)
+                elif col_info['type'] == 'numeric':
+                    recommendations['y_axis'].append(column)
+
+            elif chart_type == 'line':
+                if col_info['type'] in ['datetime', 'numeric', 'ordinal']:
+                    recommendations['x_axis'].append(column)
+                elif col_info['type'] == 'numeric':
+                    recommendations['y_axis'].append(column)
+
+            elif chart_type == 'scatter':
+                if col_info['type'] == 'numeric':
+                    recommendations['x_axis'].append(column)
+                    recommendations['y_axis'].append(column)
+
+            elif chart_type == 'histogram':
+                if col_info['type'] == 'numeric':
+                    recommendations['x_axis'].append(column)
+
+            elif chart_type == 'pie':
+                if col_info['type'] in ['categorical', 'ordinal']:
+                    recommendations['x_axis'].append(column)
+                elif col_info['type'] == 'numeric':
+                    recommendations['y_axis'].append(column)
+
+            elif chart_type == 'box':
+                if col_info['type'] in ['categorical', 'ordinal']:
+                    recommendations['x_axis'].append(column)
+                elif col_info['type'] == 'numeric':
+                    recommendations['y_axis'].append(column)
+
+        return recommendations
+
+    # 添加验证字段的方法
+    def validate_chart_fields(self, df: pd.DataFrame, chart_type: str, x_col: str, y_col: Optional[str] = None) -> Dict[
+        str, Any]:
+        """验证图表字段选择的合理性"""
+        result = {
+            'is_valid': False,
+            'warnings': [],
+            'suggestions': [],
+            'recommended_x': None,
+            'recommended_y': None
+        }
+
+        if x_col not in df.columns:
+            result['warnings'].append(f"X轴字段 '{x_col}' 不存在")
+            return result
+
+        x_info = self._analyze_column(df[x_col])
+
+        if chart_type == 'bar':
+            if x_info['type'] not in ['categorical', 'ordinal']:
+                result['warnings'].append(f"条形图的X轴应该是分类或有序变量，但 '{x_col}' 是 {x_info['type']} 类型")
+
+        elif chart_type == 'line':
+            if x_info['type'] not in ['datetime', 'numeric', 'ordinal']:
+                result['warnings'].append(f"折线图的X轴应该是时间、数值或有序变量，但 '{x_col}' 是 {x_info['type']} 类型")
+
+        elif chart_type == 'scatter':
+            if x_info['type'] != 'numeric':
+                result['warnings'].append(f"散点图的X轴应该是数值变量，但 '{x_col}' 是 {x_info['type']} 类型")
+
+        # 获取推荐字段
+        recommendations = self.get_smart_field_recommendations(df, chart_type)
+        if recommendations['x_axis']:
+            result['recommended_x'] = recommendations['x_axis'][0]
+
+        if y_col and recommendations['y_axis']:
+            result['recommended_y'] = recommendations['y_axis'][0]
+
+        result['is_valid'] = len(result['warnings']) == 0
+        return result
+
+    # 添加图表逻辑解释方法
+    def get_chart_logic_explanation(self, df: pd.DataFrame, chart_type: str, x_col: str,
+                                    y_col: Optional[str] = None) -> str:
+        """获取图表逻辑解释"""
+        if chart_type in CHART_CONFIGS:
+            config = CHART_CONFIGS[chart_type]
+            explanation = f"**图表类型**: {config['title']}\n\n"
+            explanation += f"**描述**: {config['description']}\n\n"
+            explanation += f"**逻辑**: {config.get('logic', '')}\n\n"
+
+            if x_col in df.columns:
+                x_info = self._analyze_column(df[x_col])
+                explanation += f"**X轴分析**:\n"
+                explanation += f"- 字段: {x_col}\n"
+                explanation += f"- 类型: {x_info['type']}\n"
+                explanation += f"- 唯一值数: {x_info.get('unique_count', 'N/A')}\n"
+
+            if y_col and y_col in df.columns:
+                y_info = self._analyze_column(df[y_col])
+                explanation += f"\n**Y轴分析**:\n"
+                explanation += f"- 字段: {y_col}\n"
+                explanation += f"- 类型: {y_info['type']}\n"
+                if y_info['type'] == 'numeric':
+                    explanation += f"- 平均值: {y_info.get('mean', 'N/A'):.2f}\n"
+                    explanation += f"- 范围: {y_info.get('min', 'N/A'):.2f} ~ {y_info.get('max', 'N/A'):.2f}\n"
+
+            return explanation
+        return ""
