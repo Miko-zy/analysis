@@ -100,7 +100,7 @@ class DatabaseManager:
             logger.error(error_msg)
             return pd.DataFrame({"error": [error_msg]})
 
-    def get_table_data(self, table_name, limit=100, offset=0):
+    def get_table_data(self, table_name, limit=50, offset=0):
         """获取表数据"""
         try:
             safe_table_name = f"`{table_name}`"
@@ -145,7 +145,7 @@ class DatabaseManager:
         """获取表的完整信息"""
         try:
             schema = self.get_table_schema(table_name)
-            sample_data = self.get_table_data(table_name, limit=100)
+            sample_data = self.get_table_data(table_name, limit=50)
             total_count = self.get_table_count(table_name)
 
             info = {
