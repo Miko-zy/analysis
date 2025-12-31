@@ -56,7 +56,7 @@ class DataAnalysisSystem:
         """创建Gradio界面"""
         with gr.Blocks(title="智能数据分析系统", theme=gr.themes.Soft(),
                        css="""
-                       .gradio-container {max-width: 1200px !important}
+                       .gradio-container {max-width: 1400px !important}
                        .success {color: green; font-weight: bold;}
                        .error {color: red; font-weight: bold;}
                        .warning {color: orange; font-weight: bold;}
@@ -80,6 +80,71 @@ class DataAnalysisSystem:
                            margin: 2px;
                            border-radius: 6px;
                            font-size: 12px;
+                       }
+                       /* 分析等级选择器样式 */
+                       .analysis-level-selector {
+                           background-color: #f0f7ff;
+                           padding: 15px;
+                           border-radius: 8px;
+                           margin-bottom: 15px;
+                           border-left: 4px solid #1890ff;
+                       }
+                       .level-btn {
+                           margin: 5px;
+                           border-radius: 20px;
+                       }
+                       .level-basic { 
+                           background-color: #e6f7ff !important; 
+                           border-color: #91d5ff !important;
+                       }
+                       .level-standard { 
+                           background-color: #bae7ff !important;
+                           border-color: #69c0ff !important;
+                       }
+                       .level-advanced { 
+                           background-color: #91d5ff !important;
+                           border-color: #40a9ff !important;
+                       }
+                       .level-expert { 
+                           background-color: #69c0ff !important;
+                           border-color: #1890ff !important;
+                       }
+                       .dimension-tag {
+                           display: inline-block;
+                           background-color: #f0f0f0;
+                           padding: 4px 8px;
+                           margin: 2px;
+                           border-radius: 4px;
+                           font-size: 12px;
+                       }
+                       .analysis-result-tabs {
+                           margin-top: 20px;
+                       }
+                       .analysis-progress {
+                           background-color: #f0f7ff;
+                           padding: 10px;
+                           border-radius: 5px;
+                           margin-bottom: 10px;
+                           border-left: 4px solid #52c41a;
+                       }
+                       .executive-summary {
+                           background-color: #f6ffed;
+                           padding: 15px;
+                           border-radius: 8px;
+                           border-left: 4px solid #52c41a;
+                           margin-top: 10px;
+                       }
+                       .key-metrics {
+                           background-color: #fff7e6;
+                           padding: 10px;
+                           border-radius: 5px;
+                           margin: 5px 0;
+                       }
+                       .action-plan {
+                           background-color: #f9f0ff;
+                           padding: 10px;
+                           border-radius: 5px;
+                           margin: 5px 0;
                        }
                        """) as demo:
             gr.Markdown("""
@@ -218,43 +283,127 @@ class DataAnalysisSystem:
                     with gr.Column(scale=1):
                         gr.Markdown("### AI分析设置")
 
-                        gr.Markdown("#### 📋 预设问题（一键填充）")
+                        # 分析等级选择
+                        gr.Markdown("#### 📊 分析深度等级")
                         with gr.Row():
-                            preset_btn1 = gr.Button("📊 数据概况分析", variant="secondary", size="sm",
-                                                    elem_classes="preset-btn")
-                            preset_btn2 = gr.Button("📈 趋势分析", variant="secondary", size="sm",
-                                                    elem_classes="preset-btn")
-                        with gr.Row():
-                            preset_btn3 = gr.Button("🔍 异常值检测", variant="secondary", size="sm",
-                                                    elem_classes="preset-btn")
-                            preset_btn4 = gr.Button("🔗 相关性分析", variant="secondary", size="sm",
-                                                    elem_classes="preset-btn")
-                        with gr.Row():
-                            preset_btn5 = gr.Button("🎯 业务洞察", variant="secondary", size="sm",
-                                                    elem_classes="preset-btn")
-                            preset_btn6 = gr.Button("📋 数据质量检查", variant="secondary", size="sm",
-                                                    elem_classes="preset-btn")
-                        with gr.Row():
-                            preset_btn7 = gr.Button("💰 财务分析", variant="secondary", size="sm",
-                                                    elem_classes="preset-btn")
-                            preset_btn8 = gr.Button("👥 客户分析", variant="secondary", size="sm",
-                                                    elem_classes="preset-btn")
+                            analysis_level = gr.Radio(
+                                choices=[
+                                    ("基础分析 (快速概览)", "basic"),
+                                    ("标准分析 (推荐)", "standard"),
+                                    ("深度分析 (详细洞察)", "advanced"),
+                                    ("专家级分析 (全面研究)", "expert")
+                                ],
+                                value="standard",
+                                label="选择分析深度",
+                                elem_classes="analysis-level-selector"
+                            )
 
+                        # 多维度分析选项
+                        gr.Markdown("#### 🎯 多维度分析")
+                        with gr.Row():
+                            dimension_time = gr.Checkbox(label="时间维度", value=True)
+                            dimension_geo = gr.Checkbox(label="地理维度", value=True)
+                        with gr.Row():
+                            dimension_product = gr.Checkbox(label="产品维度", value=True)
+                            dimension_customer = gr.Checkbox(label="客户维度", value=True)
+                        with gr.Row():
+                            dimension_channel = gr.Checkbox(label="渠道维度", value=True)
+                            dimension_custom = gr.Checkbox(label="自定义维度", value=False)
+
+                        custom_dimension = gr.Textbox(
+                            label="自定义维度（逗号分隔）",
+                            placeholder="例如：年龄段,收入水平,教育程度",
+                            visible=False
+                        )
+
+                        # 预设问题更新
+                        gr.Markdown("#### 📋 预设分析模板")
+                        with gr.Row():
+                            preset_btn1 = gr.Button("📊 数据概览分析", variant="secondary", size="sm",
+                                                    elem_classes=["preset-btn", "level-basic"])
+                            preset_btn2 = gr.Button("📈 趋势深度分析", variant="secondary", size="sm",
+                                                    elem_classes=["preset-btn", "level-advanced"])
+                        with gr.Row():
+                            preset_btn3 = gr.Button("🔍 异常值深度检测", variant="secondary", size="sm",
+                                                    elem_classes=["preset-btn", "level-advanced"])
+                            preset_btn4 = gr.Button("🔗 多维度关联分析", variant="secondary", size="sm",
+                                                    elem_classes=["preset-btn", "level-expert"])
+                        with gr.Row():
+                            preset_btn5 = gr.Button("🎯 商业智能洞察", variant="secondary", size="sm",
+                                                    elem_classes=["preset-btn", "level-standard"])
+                            preset_btn6 = gr.Button("📋 数据质量全面评估", variant="secondary", size="sm",
+                                                    elem_classes=["preset-btn", "level-expert"])
+                        with gr.Row():
+                            preset_btn7 = gr.Button("💰 财务深度分析", variant="secondary", size="sm",
+                                                    elem_classes=["preset-btn", "level-advanced"])
+                            preset_btn8 = gr.Button("👥 客户细分分析", variant="secondary", size="sm",
+                                                    elem_classes=["preset-btn", "level-standard"])
+
+                        # 新的分析类型按钮
+                        with gr.Row():
+                            multi_dim_btn = gr.Button("🌐 多维度综合分析", variant="primary", size="sm")
+                            trend_btn = gr.Button("📈 专项趋势分析", variant="primary", size="sm")
+
+                        gr.Markdown("#### 🎯 高级分析选项")
                         analysis_prompt = gr.Textbox(
                             label="分析需求描述",
                             placeholder="例如：分析销售数据的季节性趋势，找出表现最好的产品和地区，提供业务建议",
                             lines=4
                         )
+
                         with gr.Row():
-                            analyze_btn = gr.Button("🧠 开始分析", variant="primary")
+                            analyze_btn = gr.Button("🧠 开始智能分析", variant="primary")
+                            summary_btn = gr.Button("📋 生成执行摘要", variant="secondary", size="sm")
                             clear_analysis_btn = gr.Button("🗑️ 清空")
+
+                        # 分析进度指示器
+                        analysis_progress = gr.Markdown(
+                            "",
+                            elem_classes="analysis-progress",
+                            visible=False
+                        )
 
                     with gr.Column(scale=2):
                         gr.Markdown("### AI分析结果")
-                        analysis_output = gr.Markdown(
-                            label="",
-                            show_label=False
-                        )
+
+                        # 分析结果标签页
+                        with gr.Tabs(elem_classes="analysis-result-tabs"):
+                            with gr.TabItem("📋 详细分析"):
+                                analysis_output = gr.Markdown(
+                                    label="详细分析结果",
+                                    show_label=False
+                                )
+
+                            with gr.TabItem("📊 关键指标"):
+                                key_metrics_output = gr.Markdown(
+                                    value="### 📊 关键指标\n\n*执行分析后，关键指标将显示在这里*",
+                                    label="关键指标提取",
+                                    show_label=False,
+                                    elem_classes="key-metrics"
+                                )
+
+                            with gr.TabItem("🚀 行动计划"):
+                                action_plan_output = gr.Markdown(
+                                    value="### 🚀 行动计划\n\n*执行分析后，行动计划将显示在这里*",
+                                    label="行动计划",
+                                    show_label=False,
+                                    elem_classes="action-plan"
+                                )
+
+                            with gr.TabItem("📈 可视化洞察"):
+                                visual_insights_output = gr.Markdown(
+                                    value="### 📈 可视化洞察\n\n*执行分析后，可视化建议将显示在这里*",
+                                    label="可视化建议",
+                                    show_label=False
+                                )
+
+                            with gr.TabItem("📋 执行摘要"):
+                                executive_summary_output = gr.Markdown(
+                                    value="### 📋 执行摘要\n\n*生成执行摘要后将显示在这里*",
+                                    label="执行摘要",
+                                    show_label=False,
+                                    elem_classes="executive-summary"
+                                )
 
             # 事件处理
             refresh_btn.click(
@@ -326,56 +475,110 @@ class DataAnalysisSystem:
                 outputs=[chart_output, chart_explanation]
             )
 
-            analyze_btn.click(
-                fn=self.perform_ai_analysis,
-                inputs=analysis_prompt,
+            # 自定义维度显示/隐藏
+            dimension_custom.change(
+                fn=lambda x: gr.Textbox(visible=x),
+                inputs=dimension_custom,
+                outputs=custom_dimension
+            )
+
+            # 新的分析按钮事件
+            multi_dim_btn.click(
+                fn=self.perform_multidimensional_analysis,
+                inputs=[dimension_time, dimension_geo, dimension_product,
+                        dimension_customer, dimension_channel, dimension_custom, custom_dimension],
                 outputs=analysis_output
+            ).then(
+                fn=lambda: gr.Markdown(visible=False),
+                outputs=analysis_progress
+            )
+
+            trend_btn.click(
+                fn=self.perform_trend_analysis,
+                outputs=analysis_output
+            ).then(
+                fn=lambda: gr.Markdown(visible=False),
+                outputs=analysis_progress
+            )
+
+            analyze_btn.click(
+                fn=lambda: gr.Markdown(value="⏳ 正在分析数据，请稍候...", visible=True),
+                outputs=analysis_progress
+            ).then(
+                fn=self.perform_ai_analysis_with_level,
+                inputs=[analysis_prompt, analysis_level],
+                outputs=analysis_output
+            ).then(
+                fn=lambda: gr.Markdown(visible=False),
+                outputs=analysis_progress
+            )
+
+            summary_btn.click(
+                fn=self.generate_executive_summary,
+                inputs=analysis_output,
+                outputs=executive_summary_output
             )
 
             clear_analysis_btn.click(
-                fn=lambda: "",
-                outputs=analysis_output
+                fn=self.clear_analysis_outputs,
+                outputs=[analysis_prompt, analysis_output, key_metrics_output,
+                         action_plan_output, visual_insights_output, executive_summary_output]
             )
 
-            # 预设按钮事件处理
+            # 更新预设按钮
             preset_btn1.click(
-                fn=lambda: "请分析数据的基本情况，包括数据分布、缺失值、异常值、主要趋势等。",
-                outputs=analysis_prompt
+                fn=lambda: ("请分析数据的基本情况，包括数据分布、缺失值、主要特征等。", "basic"),
+                outputs=[analysis_prompt, analysis_level]
             )
 
             preset_btn2.click(
-                fn=lambda: "请分析数据的时间趋势，包括季节性变化、增长趋势、周期性规律等。",
-                outputs=analysis_prompt
+                fn=lambda: ("请进行深度的趋势分析，包括季节性、周期性、增长趋势和预测模型。", "advanced"),
+                outputs=[analysis_prompt, analysis_level]
             )
 
             preset_btn3.click(
-                fn=lambda: "请检测数据中的异常值，识别潜在的数据质量问题，分析异常值的原因和影响。",
-                outputs=analysis_prompt
+                fn=lambda: ("请深度检测数据中的异常值，使用统计方法和机器学习技术识别异常模式。", "advanced"),
+                outputs=[analysis_prompt, analysis_level]
             )
 
             preset_btn4.click(
-                fn=lambda: "请分析各变量之间的相关性，找出强相关和弱相关的变量，提供关联性洞察。",
-                outputs=analysis_prompt
+                fn=lambda: ("请进行多维度关联分析，探索各变量间的复杂关系和交互效应。", "expert"),
+                outputs=[analysis_prompt, analysis_level]
             )
 
             preset_btn5.click(
-                fn=lambda: "从业务角度分析数据，提供可行的商业建议和行动计划，识别增长机会。",
-                outputs=analysis_prompt
+                fn=lambda: ("从商业智能角度分析数据，提供实用的业务洞察和决策支持。", "standard"),
+                outputs=[analysis_prompt, analysis_level]
             )
 
             preset_btn6.click(
-                fn=lambda: "检查数据的完整性、一致性、准确性，评估数据质量并提供改进建议。",
-                outputs=analysis_prompt
+                fn=lambda: ("进行全面数据质量评估，包括完整性、一致性、准确性、时效性等多维度检查。", "expert"),
+                outputs=[analysis_prompt, analysis_level]
             )
 
             preset_btn7.click(
-                fn=lambda: "分析财务数据，包括收入、成本、利润、投资回报率等，提供财务洞察。",
-                outputs=analysis_prompt
+                fn=lambda: ("进行深度的财务数据分析，包括盈利能力、偿债能力、运营效率等全面分析。", "advanced"),
+                outputs=[analysis_prompt, analysis_level]
             )
 
             preset_btn8.click(
-                fn=lambda: "分析客户数据，包括客户细分、行为模式、满意度、流失率等客户洞察。",
-                outputs=analysis_prompt
+                fn=lambda: ("进行客户细分分析，包括RFM分析、客户生命周期价值、客户行为模式等。", "standard"),
+                outputs=[analysis_prompt, analysis_level]
+            )
+
+            # 分析完成后更新其他标签页
+            analysis_output.change(
+                fn=self.extract_key_metrics,
+                inputs=analysis_output,
+                outputs=key_metrics_output
+            ).then(
+                fn=self.extract_action_plan,
+                inputs=analysis_output,
+                outputs=action_plan_output
+            ).then(
+                fn=self.extract_visual_insights,
+                inputs=analysis_output,
+                outputs=visual_insights_output
             )
 
         return demo
@@ -404,7 +607,7 @@ class DataAnalysisSystem:
             return {"error": "请先选择数据表"}
 
         try:
-            df = self.db_manager.get_table_data(table_name, 100)
+            df = self.db_manager.get_table_data(table_name, 50)
             if df.empty or ('error' in df.columns and len(df) == 1):
                 return {"error": "无法加载数据"}
 
@@ -418,7 +621,7 @@ class DataAnalysisSystem:
         """加载表数据"""
         if table_name:
             try:
-                df = self.db_manager.get_table_data(table_name, 100)
+                df = self.db_manager.get_table_data(table_name, 50)
                 total_count = self.db_manager.get_table_count(table_name)
 
                 self.table_data = df
@@ -722,8 +925,8 @@ class DataAnalysisSystem:
 
         return chart, explanation
 
-    def perform_ai_analysis(self, analysis_prompt):
-        """执行AI分析"""
+    def perform_ai_analysis_with_level(self, analysis_prompt, analysis_level):
+        """执行带等级设定的AI分析"""
         current_data = self.get_current_data_for_analysis()
 
         if current_data is None or current_data.empty:
@@ -734,30 +937,280 @@ class DataAnalysisSystem:
 
         try:
             data_source = "查询结果" if self.is_query_result else f"表: {self.current_table_name}"
-            data_description = f"""
-            **数据来源:** {data_source}
-            **数据概况:**
-            - 数据形状: {current_data.shape}
-            - 列名: {list(current_data.columns)}
+            data_description = self._build_data_description(current_data, data_source)
 
-            **前5行数据预览:**
-            ```
-            {current_data.head().to_string()}
-            ```
-            """
+            logger.info(f"执行{analysis_level}等级分析: {analysis_prompt}")
 
-            numeric_cols = current_data.select_dtypes(include=[np.number])
-            if not numeric_cols.empty:
-                data_description += f"\n**基本统计信息:**\n```\n{numeric_cols.describe().to_string()}\n```"
+            # 根据等级调用不同的分析方法
+            if analysis_level == "basic":
+                insights = self.llm_analyst.analyze_data_insights(
+                    analysis_prompt, data_description, "basic"
+                )
+            elif analysis_level == "advanced":
+                insights = self.llm_analyst.analyze_data_insights(
+                    analysis_prompt, data_description, "advanced"
+                )
+            elif analysis_level == "expert":
+                insights = self.llm_analyst.analyze_data_insights(
+                    analysis_prompt, data_description, "expert"
+                )
+            else:  # standard
+                insights = self.llm_analyst.analyze_data_insights(
+                    analysis_prompt, data_description, "standard"
+                )
 
-            logger.info(f"执行AI分析: {analysis_prompt}")
-            insights = self.llm_analyst.analyze_data_insights(analysis_prompt, data_description)
-            return f"## 🤖 AI分析结果 ({data_source})\n\n{insights}"
+            return insights
 
         except Exception as e:
             error_msg = f"**❌ 分析过程中出错:** {str(e)}"
             logger.error(error_msg)
             return error_msg
+
+    def perform_multidimensional_analysis(self, time_dim, geo_dim, product_dim,
+                                          customer_dim, channel_dim, custom_dim, custom_dim_text):
+        """执行多维度分析"""
+        current_data = self.get_current_data_for_analysis()
+
+        if current_data is None or current_data.empty:
+            return "**❌ 请先加载数据或执行查询**"
+
+        try:
+            # 构建维度列表
+            dimensions = []
+            if time_dim: dimensions.append("时间")
+            if geo_dim: dimensions.append("地理")
+            if product_dim: dimensions.append("产品")
+            if customer_dim: dimensions.append("客户")
+            if channel_dim: dimensions.append("渠道")
+
+            # 添加自定义维度
+            if custom_dim and custom_dim_text.strip():
+                custom_dims = [d.strip() for d in custom_dim_text.split(',') if d.strip()]
+                dimensions.extend(custom_dims)
+
+            if not dimensions:
+                return "**⚠️ 请至少选择一个分析维度**"
+
+            data_source = "查询结果" if self.is_query_result else f"表: {self.current_table_name}"
+            data_description = self._build_data_description(current_data, data_source)
+
+            logger.info(f"执行多维度分析，维度: {dimensions}")
+
+            analysis = self.llm_analyst.analyze_data_multidimensional(
+                data_description, dimensions
+            )
+
+            return analysis
+
+        except Exception as e:
+            error_msg = f"**❌ 多维度分析过程中出错:** {str(e)}"
+            logger.error(error_msg)
+            return error_msg
+
+    def perform_trend_analysis(self):
+        """执行专项趋势分析"""
+        current_data = self.get_current_data_for_analysis()
+
+        if current_data is None or current_data.empty:
+            return "**❌ 请先加载数据或执行查询**"
+
+        try:
+            data_source = "查询结果" if self.is_query_result else f"表: {self.current_table_name}"
+            data_description = self._build_data_description(current_data, data_source)
+
+            logger.info("执行专项趋势分析")
+
+            # 自动检测时间列
+            time_columns = []
+            for col in current_data.columns:
+                if any(keyword in col.lower() for keyword in ['date', 'time', 'year', 'month', 'day']):
+                    time_columns.append(col)
+
+            time_period = f"基于时间列: {', '.join(time_columns[:3])}" if time_columns else "所有时期"
+
+            analysis = self.llm_analyst.analyze_data_trends(
+                data_description, time_period
+            )
+
+            return analysis
+
+        except Exception as e:
+            error_msg = f"**❌ 趋势分析过程中出错:** {str(e)}"
+            logger.error(error_msg)
+            return error_msg
+
+    def generate_executive_summary(self, full_analysis):
+        """生成执行摘要"""
+        if not full_analysis or "❌" in full_analysis or "⚠️" in full_analysis:
+            return "**❌ 请先进行完整的分析再生成摘要**"
+
+        try:
+            logger.info("生成执行摘要")
+
+            # 提取详细分析内容（去掉标题）
+            content = full_analysis.split("\n\n", 1)[1] if "\n\n" in full_analysis else full_analysis
+
+            summary = self.llm_analyst.generate_executive_summary(content)
+
+            return summary
+
+        except Exception as e:
+            error_msg = f"**❌ 生成摘要过程中出错:** {str(e)}"
+            logger.error(error_msg)
+            return error_msg
+
+    def extract_key_metrics(self, analysis_text):
+        """从分析结果中提取关键指标"""
+        if not analysis_text or "❌" in analysis_text or "⚠️" in analysis_text:
+            return "### 📊 关键指标\n\n*等待分析结果...*"
+
+        try:
+            # 从分析文本中提取关键指标部分
+            import re
+
+            # 查找包含关键指标的章节
+            metrics_sections = re.findall(r'(?:关键指标|核心指标|主要指标|KPI).*?(?=\n#|\n##|\Z)',
+                                          analysis_text, re.IGNORECASE | re.DOTALL)
+
+            if metrics_sections:
+                return f"### 📊 关键指标\n\n{metrics_sections[0]}"
+            else:
+                # 如果没有找到关键指标章节，尝试提取数字和百分比
+                metrics = re.findall(r'([\d.,]+%?|\d+\.\d+%?)\s*(?:增长|下降|提高|降低|占比|达到)', analysis_text)
+                if metrics:
+                    return f"### 📊 关键指标\n\n**提取的数值指标**:\n" + "\n".join(
+                        [f"• {metric}" for metric in set(metrics[:10])])
+                else:
+                    return "### 📊 关键指标\n\n*分析结果中未明确标识关键指标*"
+
+        except Exception as e:
+            logger.error(f"提取关键指标失败: {e}")
+            return "### 📊 关键指标\n\n*提取失败，请查看详细分析*"
+
+    def extract_action_plan(self, analysis_text):
+        """从分析结果中提取行动计划"""
+        if not analysis_text or "❌" in analysis_text or "⚠️" in analysis_text:
+            return "### 🚀 行动计划\n\n*等待分析结果...*"
+
+        try:
+            # 从分析文本中提取行动计划部分
+            import re
+
+            # 查找包含行动计划的章节
+            action_sections = re.findall(r'(?:行动计划|行动建议|建议|下一步|措施).*?(?=\n#|\n##|\Z)',
+                                         analysis_text, re.IGNORECASE | re.DOTALL)
+
+            if action_sections:
+                return f"### 🚀 行动计划\n\n{action_sections[0]}"
+            else:
+                # 尝试提取包含"建议"、"应该"、"需要"的句子
+                suggestions = re.findall(r'[^。！？]*?(?:建议|应该|需要|建议|优先)[^。！？]*[。！？]', analysis_text)
+                if suggestions:
+                    return f"### 🚀 行动计划\n\n**提取的行动建议**:\n" + "\n".join(
+                        [f"• {s.strip()}" for s in set(suggestions[:10])])
+                else:
+                    return "### 🚀 行动计划\n\n*分析结果中未明确标识行动计划*"
+
+        except Exception as e:
+            logger.error(f"提取行动计划失败: {e}")
+            return "### 🚀 行动计划\n\n*提取失败，请查看详细分析*"
+
+    def extract_visual_insights(self, analysis_text):
+        """从分析结果中提取可视化洞察"""
+        if not analysis_text or "❌" in analysis_text or "⚠️" in analysis_text:
+            return "### 📈 可视化洞察\n\n*等待分析结果...*"
+
+        try:
+            # 从分析文本中提取可视化相关建议
+            import re
+
+            # 查找可视化相关的建议
+            visual_keywords = ['图表', '可视化', '图形', '展示', '趋势图', '柱状图', '折线图', '散点图', '热力图']
+            visual_sentences = []
+
+            for sentence in re.split(r'[。！？]', analysis_text):
+                if any(keyword in sentence for keyword in visual_keywords):
+                    visual_sentences.append(sentence.strip())
+
+            if visual_sentences:
+                return f"### 📈 可视化洞察\n\n**可视化建议**:\n" + "\n".join(
+                    [f"• {s}" for s in set(visual_sentences[:10])])
+            else:
+                return "### 📈 可视化洞察\n\n*分析结果中未包含具体的可视化建议*"
+
+        except Exception as e:
+            logger.error(f"提取可视化洞察失败: {e}")
+            return "### 📈 可视化洞察\n\n*提取失败，请查看详细分析*"
+
+    def clear_analysis_outputs(self):
+        """清空所有分析输出"""
+        return "", "", "", "", "", ""
+
+    def _build_data_description(self, current_data, data_source):
+        """构建数据描述"""
+        data_description = f"""
+        **数据来源:** {data_source}
+        **数据概况:**
+        - 数据形状: {current_data.shape[0]} 行 × {current_data.shape[1]} 列
+        - 内存使用: {current_data.memory_usage(deep=True).sum() / 1024 / 1024:.2f} MB
+        - 列名列表: {list(current_data.columns)}
+
+        **数据类型分布:**
+        """
+
+        # 数据类型统计
+        dtypes = current_data.dtypes
+        type_counts = {}
+        for dtype in dtypes:
+            dtype_str = str(dtype)
+            if 'int' in dtype_str or 'float' in dtype_str:
+                type_counts['数值型'] = type_counts.get('数值型', 0) + 1
+            elif 'object' in dtype_str or 'string' in dtype_str:
+                type_counts['文本型'] = type_counts.get('文本型', 0) + 1
+            elif 'datetime' in dtype_str:
+                type_counts['日期时间型'] = type_counts.get('日期时间型', 0) + 1
+            elif 'bool' in dtype_str:
+                type_counts['布尔型'] = type_counts.get('布尔型', 0) + 1
+            else:
+                type_counts['其他类型'] = type_counts.get('其他类型', 0) + 1
+
+        for type_name, count in type_counts.items():
+            data_description += f"  - {type_name}: {count} 列\n"
+
+        data_description += f"""
+        **缺失值情况:**
+        - 总缺失值数量: {current_data.isnull().sum().sum()}
+        - 缺失值比例: {current_data.isnull().mean().mean() * 100:.2f}%
+
+        **前5行数据预览:**
+        ```
+        {current_data.head().to_string()}
+        ```
+        """
+
+        # 数值列的统计信息
+        numeric_cols = current_data.select_dtypes(include=[np.number])
+        if not numeric_cols.empty:
+            data_description += f"""
+            **数值列基本统计信息:**
+            ```
+            {numeric_cols.describe().to_string()}
+            ```
+            """
+
+        # 分类列的分布信息
+        categorical_cols = current_data.select_dtypes(include=['object', 'category'])
+        if not categorical_cols.empty and len(categorical_cols.columns) > 0:
+            sample_cat_col = categorical_cols.columns[0]
+            if len(categorical_cols[sample_cat_col].unique()) <= 10:
+                data_description += f"""
+                **分类列 '{sample_cat_col}' 的分布:**
+                ```
+                {categorical_cols[sample_cat_col].value_counts().to_string()}
+                ```
+                """
+
+        return data_description
 
     def check_system_status(self):
         """检查系统状态"""
@@ -822,6 +1275,12 @@ def main():
 
         print("\n✅ 系统启动成功！")
         print("🌐 访问地址: http://localhost:7860")
+        print("📊 系统功能:")
+        print("  - 数据浏览与查询")
+        print("  - 智能可视化分析")
+        print("  - 四级深度AI分析（基础/标准/深度/专家）")
+        print("  - 多维度综合分析")
+        print("  - 执行摘要生成")
         print("⏹️  按 Ctrl+C 停止服务\n")
 
         demo.launch(
